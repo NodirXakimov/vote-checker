@@ -1,0 +1,14 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script>
+    const path = window.location.pathname;
+    const base = '/vote-checker';
+    const route = path.startsWith(base) ? path.slice(base.length) : path;
+    sessionStorage.setItem('redirect', route || '/');
+    window.location.replace(base + '/');
+  </script>
+</head>
+<body></body>
+</html>
