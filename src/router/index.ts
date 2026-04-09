@@ -7,6 +7,11 @@ const router = createRouter({
       path: '/',
       name: 'Checker',
       component: () => import('@/pages/CheckerPage.vue')
+    },
+    {
+      path: '/settings',
+      name: 'Settings',
+      component: () => import('@/pages/SettingsPage.vue')
     }
   ],
 })
