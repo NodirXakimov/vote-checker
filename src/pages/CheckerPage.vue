@@ -2,6 +2,7 @@
 import { ref, watch, onMounted } from 'vue'
 import { supabase } from '@/lib/supabase'
 import AppPagination from '@/components/AppPagination.vue'
+import { formatDateTime } from "@/utils/formatDateTime.ts";
 
 // ── adjust these to match your Supabase table ──────────────────────────────
 const TABLE = 'votes'
@@ -98,12 +99,6 @@ function highlightMatch(text: string): string {
   return text.replace(new RegExp(`(${q.replace(/[-]/g, '\\-')})`, 'gi'), '<mark class="highlight">$1</mark>')
 }
 
-function formatDate(value: string): string {
-  if (!value) return '—'
-  return new Date(value).toLocaleDateString('uz-UZ', {
-    year: 'numeric', month: '2-digit', day: '2-digit',
-  })
-}
 </script>
 
 <template>
@@ -151,7 +146,7 @@ function formatDate(value: string): string {
           <tr v-else v-for="(row, index) in rows" :key="row.id">
             <td>{{ (currentPage - 1) * 10 + index + 1 }}</td>
             <td v-html="highlightMatch(String(row[COL_PHONE] ?? ''))"></td>
-            <td>{{ formatDate(String(row[COL_DATE] ?? '')) }}</td>
+            <td>{{ formatDateTime(String(row[COL_DATE] ?? '')) }}</td>
           </tr>
         </tbody>
       </table>
