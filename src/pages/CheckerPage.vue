@@ -105,7 +105,7 @@ function highlightMatch(text: string): string {
   <div class="page-wrapper">
     <header>
       <h1>📞 Телефон рақамлар</h1>
-      <h2>(Гулистон МФЙ)</h2>
+      <h2>(Нишон тумани, Гулистон МФЙ)</h2>
       <div class="stats">
         <span>Жами: <span v-if="loadingAll" class="stat-loading">...</span><template v-else>{{ allCount }}</template></span>
         <span v-if="query">Топилди: <span v-if="loading" class="stat-loading">...</span><template v-else>{{ filteredCount }}</template></span>
