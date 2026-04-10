@@ -295,7 +295,7 @@ tbody tr:hover {
 @media (max-width: 600px) {
 
   th:nth-child(1),
-  td:nth-child(1) {
+  td:nth-child(1):not(.loading-cell) {
     display: none;
   }
 
