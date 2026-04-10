@@ -141,7 +141,17 @@ function highlightMatch(text: string): string {
             </td>
           </tr>
           <tr v-else-if="!rows.length">
-            <td colspan="3" style="text-align:center; color:#9ca3af">Маълумот топилмади</td>
+            <td colspan="3" class="empty-cell">
+              <div class="empty-state">
+                <svg class="empty-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                  <circle cx="11" cy="11" r="8" />
+                  <line x1="21" y1="21" x2="16.65" y2="16.65" />
+                  <line x1="8" y1="11" x2="14" y2="11" />
+                </svg>
+                <p class="empty-title">Маълумот топилмади</p>
+                <p v-if="query" class="empty-hint">«{{ query }}» бўйича натижа йўқ</p>
+              </div>
+            </td>
           </tr>
           <tr v-else v-for="(row, index) in rows" :key="row.id">
             <td>{{ (currentPage - 1) * 10 + index + 1 }}</td>
@@ -292,10 +302,41 @@ tbody tr:hover {
   border-radius: 3px;
 }
 
+.empty-cell {
+  padding: 40px 14px !important;
+}
+
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+
+.empty-icon {
+  width: 48px;
+  height: 48px;
+  color: #d1d5db;
+  margin-bottom: 4px;
+}
+
+.empty-title {
+  font-size: 15px;
+  font-weight: 500;
+  color: #6b7280;
+  margin: 0;
+}
+
+.empty-hint {
+  font-size: 13px;
+  color: #9ca3af;
+  margin: 0;
+}
+
 @media (max-width: 600px) {
 
   th:nth-child(1),
-  td:nth-child(1):not(.loading-cell) {
+  td:nth-child(1):not(.loading-cell):not(.empty-cell) {
     display: none;
   }
 
