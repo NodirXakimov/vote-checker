@@ -73,6 +73,36 @@ watch(availableDays, (days) => {
   if (selectedDay.value && !days.includes(selectedDay.value)) selectedDay.value = ''
 })
 
+// Per-day counts for the table. Unlike the charts this covers every initiative.
+const tableDaily = computed(() => {
+  if (!data.value) return { days: [] as string[], byKey: new Map<string, number>() }
+  const ids = initiatives.value.map((i) => i.id)
+  const result = toDaily(data.value.hourly, ids)
+  const byKey = new Map<string, number>()
+  result.series.forEach((serie) => {
+    serie.points.forEach((votes, i) => {
+      byKey.set(serie.id + '|' + result.days[i], votes)
+    })
+  })
+  return { days: result.days, byKey }
+})
+
+function dayVotes(id: string, day: string): number {
+  return tableDaily.value.byKey.get(id + '|' + day) ?? 0
+}
+
+const dayPeak = computed(() =>
+  Math.max(1, ...[...tableDaily.value.byKey.values()])
+)
+
+// Magnitude reads as tint intensity, one hue. A flat "positive" green would be
+// the same on every cell and carry no information -- nothing here is ever negative.
+function dayTint(value: number): string {
+  if (!value) return 'transparent'
+  const alpha = 0.06 + (value / dayPeak.value) * 0.26
+  return 'rgba(42, 120, 214, ' + alpha.toFixed(3) + ')'
+}
+
 const hiddenCount = computed(() => Math.max(0, initiatives.value.length - chartIds.value.length))
 
 // Slots are pinned by sorted id within the charted set, so re-sorting the ranking
@@ -128,19 +158,47 @@ const lastPointLabels: Plugin<'line'> = {
     ctx.save()
     ctx.font = '500 11px system-ui, sans-serif'
     ctx.textBaseline = 'middle'
+    const entries: { x: number; y: number; text: string; color: string }[] = []
     chart.data.datasets.forEach((ds, i) => {
       const meta = chart.getDatasetMeta(i)
       if (meta.hidden) return
       const last = meta.data[meta.data.length - 1]
       if (!last) return
 
-      ctx.fillStyle = (ds.borderColor as string) || '#374151'
+      entries.push({
+        x: last.x,
+        y: last.y,
+        text: String(ds.label || ''),
+        color: (ds.borderColor as string) || '#374151',
+      })
+    })
+
+    // Lines that end close together would stack their labels on top of each
+    // other, so push them apart top-down and pull the overflow back up.
+    const GAP = 15
+    const top = chart.chartArea.top + 6
+    const bottom = chart.chartArea.bottom - 6
+    entries.sort((a, b) => a.y - b.y)
+    entries.forEach((e, i) => {
+      const prev = entries[i - 1]
+      e.y = Math.max(e.y, top, prev ? prev.y + GAP : top)
+    })
+    for (let i = entries.length - 1; i >= 0; i--) {
+      const e = entries[i]
+      if (!e) continue
+      const next = entries[i + 1]
+      const ceiling = next ? next.y - GAP : bottom
+      if (e.y > ceiling) e.y = ceiling
+    }
+
+    entries.forEach((e) => {
+      ctx.fillStyle = e.color
       ctx.beginPath()
-      ctx.arc(last.x + 12, last.y, 3.5, 0, Math.PI * 2)
+      ctx.arc(e.x + 12, e.y, 3.5, 0, Math.PI * 2)
       ctx.fill()
 
       ctx.fillStyle = '#374151'
-      ctx.fillText(String(ds.label || ''), last.x + 20, last.y)
+      ctx.fillText(e.text, e.x + 20, e.y)
     })
     ctx.restore()
   },
@@ -233,7 +291,7 @@ const lineOptions = {
       beginAtZero: true,
       border: { display: false },
       grid: { color: '#f1f2f6' },
-      ticks: { font: { size: 11 }, color: '#6b7280' },
+      ticks: { maxTicksLimit: 10, font: { size: 11 }, color: '#6b7280' },
     },
   },
 }
@@ -372,7 +430,7 @@ function formatStamp(value: string): string {
           Соатлик кесимда тўпланган йиғинди.
           <template v-if="hiddenCount"> Энг кўп овозли {{ chartIds.length }} та ташаббус кўрсатилган; қолган {{ hiddenCount }} таси қуйидаги жадвалда.</template>
         </p>
-        <div class="chart-box">
+        <div class="chart-box chart-box--tall">
           <Line :data="cumulative" :options="lineOptions" :plugins="[lastPointLabels]" />
         </div>
       </section>
@@ -411,22 +469,36 @@ function formatStamp(value: string): string {
             <thead>
               <tr>
                 <th class="col-num">#</th>
-                <th>Ташаббус</th>
+                <th class="col-name">Ташаббус</th>
                 <th>Жами</th>
                 <th>Юкланди</th>
                 <th>Ҳолат</th>
+                <th v-for="day in tableDaily.days" :key="day" class="col-day">
+                  {{ shortDay(day) }}
+                </th>
               </tr>
             </thead>
             <tbody>
               <tr v-for="(item, index) in ranked" :key="item.id">
                 <td class="col-num">{{ index + 1 }}</td>
-                <td>
+                <td class="col-name">
                   <span class="swatch" :style="{ background: colorOf(item.id) }"></span>
                   {{ item.label }}
                 </td>
                 <td>{{ item.total.toLocaleString('uz-UZ') }}</td>
                 <td>{{ item.collected.toLocaleString('uz-UZ') }}</td>
                 <td>{{ item.complete ? 'Тўлиқ' : 'Юкланмоқда' }}</td>
+                <td
+                  v-for="day in tableDaily.days"
+                  :key="day"
+                  class="col-day"
+                  :style="{ background: dayTint(dayVotes(item.id, day)) }"
+                >
+                  <span v-if="dayVotes(item.id, day)" class="day-gain">
+                    +{{ dayVotes(item.id, day).toLocaleString('uz-UZ') }}
+                  </span>
+                  <span v-else class="day-zero">—</span>
+                </td>
               </tr>
             </tbody>
           </table>
@@ -563,7 +635,7 @@ h1 {
 .rank-list {
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 20px;
 }
 
 .rank-head {
@@ -577,21 +649,27 @@ h1 {
 .rank-name {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
-  font-size: 14px;
+  gap: 9px;
+  font-size: 17px;
   color: #374151;
 }
 
+/* Swatch scales with the larger name text; the table's stays as it was. */
+.rank-name .swatch {
+  width: 12px;
+  height: 12px;
+}
+
 .rank-value {
-  font-size: 15px;
+  font-size: 20px;
   font-weight: 600;
   color: #1f2937;
   font-variant-numeric: tabular-nums;
 }
 
 .rank-num {
-  min-width: 18px;
-  font-size: 12px;
+  min-width: 22px;
+  font-size: 15px;
   font-weight: 600;
   color: #9ca3af;
   font-variant-numeric: tabular-nums;
@@ -611,8 +689,8 @@ h1 {
 }
 
 .tag {
-  font-size: 11px;
-  padding: 1px 6px;
+  font-size: 12px;
+  padding: 2px 8px;
   border-radius: 999px;
   background: #eff6ff;
   color: #2563eb;
@@ -620,7 +698,7 @@ h1 {
 
 .track {
   position: relative;
-  height: 12px;
+  height: 14px;
   background: var(--track);
   border-radius: 6px;
   overflow: hidden;
@@ -636,9 +714,9 @@ h1 {
 }
 
 .rank-note {
-  font-size: 12px;
+  font-size: 14px;
   color: #9ca3af;
-  margin-top: 5px;
+  margin-top: 6px;
 }
 
 .filter-row {
@@ -676,9 +754,38 @@ h1 {
   height: 340px;
 }
 
+/* The cumulative chart carries a direct label per series, so it needs more
+   vertical room before those labels start colliding. */
+.chart-box--tall {
+  height: 460px;
+}
+
 .table-scroll {
   overflow-x: auto;
   margin-top: 14px;
+}
+
+/* Day columns push the table past the card width, so identity stays pinned
+   while the daily figures scroll under it. */
+.col-name {
+  position: sticky;
+  left: 0;
+  z-index: 1;
+  background: white;
+}
+
+.col-day {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.day-gain {
+  color: #1f2937;
+  font-weight: 500;
+}
+
+.day-zero {
+  color: #d1d5db;
 }
 
 table {
@@ -772,8 +879,20 @@ td .swatch {
     font-size: 20px;
   }
 
+  .rank-name {
+    font-size: 15px;
+  }
+
+  .rank-value {
+    font-size: 17px;
+  }
+
   .chart-box {
     height: 240px;
+  }
+
+  .chart-box--tall {
+    height: 340px;
   }
 }
 </style>
