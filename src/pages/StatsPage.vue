@@ -15,6 +15,7 @@ import {
   type Plugin,
 } from 'chart.js'
 import { fetchStats, toCumulative, toDaily, type StatsData } from '@/lib/stats'
+import { fetchVisits, type VisitData } from '@/lib/visits'
 import { assignColors, OTHER_COLOR, TRACK_COLOR } from '@/lib/palette'
 import { INITIATIVE_ID } from '@/lib/config'
 
@@ -40,7 +41,27 @@ async function load() {
   loading.value = false
 }
 
-onMounted(load)
+// Visits load separately from the vote aggregates: they come from a different
+// view, and db/visits.sql may not have been run yet on a given deployment. A
+// missing visit_stats view must not blank out the vote charts, so the failure
+// is kept local to its own card.
+const visits = ref<VisitData | null>(null)
+const visitsFailed = ref(false)
+
+async function loadVisits() {
+  try {
+    visits.value = await fetchVisits()
+  } catch {
+    visitsFailed.value = true
+  }
+}
+
+function loadAll() {
+  void load()
+  void loadVisits()
+}
+
+onMounted(loadAll)
 
 // -- derived ----------------------------------------------------------------
 
@@ -348,7 +369,7 @@ function formatStamp(value: string): string {
           :disabled="loading"
           aria-label="Янгилаш"
           title="Янгилаш"
-          @click="load"
+          @click="loadAll"
         >
           <svg
             class="refresh-icon"
@@ -526,10 +547,38 @@ function formatStamp(value: string): string {
         </div>
       </section>
     </template>
+
+    <!-- Site traffic. Separate card, never folded into the vote charts: a page
+         view is a different unit over a different population, and putting the
+         two on one axis would invite reading one as the other. -->
+    <section v-if="visits && !visitsFailed" class="card">
+      <h2>Сайт ташрифлари</h2>
+      <p class="card-hint">
+        Шу саҳифа очилган сони. Овозлар билан боғлиқ эмас.
+      </p>
+      <div class="visit-row">
+        <div class="kpi">
+          <span class="kpi-label">Кўришлар</span>
+          <span class="kpi-value">{{ visits.views.toLocaleString('uz-UZ') }}</span>
+          <span class="kpi-sub">жами очилишлар</span>
+        </div>
+        <div class="kpi">
+          <span class="kpi-label">Ташрифчилар</span>
+          <span class="kpi-value">≈{{ visits.visitors.toLocaleString('uz-UZ') }}</span>
+          <span class="kpi-sub">тахминий, браузер бўйича</span>
+        </div>
+      </div>
+    </section>
   </div>
 </template>
 
 <style scoped>
+.visit-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+}
+
 .page-wrapper {
   max-width: 1140px;
   margin: auto;

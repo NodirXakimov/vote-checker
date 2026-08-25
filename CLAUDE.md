@@ -54,6 +54,22 @@ Sibling tables `votes_origin` and `votes_2026_1` also exist and are anon-readabl
 - `vote_date` has no time zone, so `new Date(value)` resolves in the *viewer's*
   local zone. Not currently pinned to `Asia/Tashkent`.
 
+### `page_views`
+
+Site traffic log, created by `db/visits.sql`. Written by `trackView()` on every
+route change, read only through the `visit_stats` aggregate view.
+
+- Anon has **INSERT only** — `revoke all` then `grant insert`, plus
+  `grant usage on sequence page_views_id_seq`. RLS alone is not enough because
+  TRUNCATE ignores RLS, and Supabase grants anon everything on new public tables
+  by default. Without the sequence grant, inserts fail with
+  `permission denied for sequence page_views_id_seq`.
+- No IP, no user agent. `session_id` is a random uuid the browser keeps in
+  `localStorage`; private-mode browsers throw on access and the row is written
+  with `session_id = null` (counts as a view, not a visitor).
+- **Counts are inflatable.** The anon key ships in the bundle and the insert
+  policy is `with check (true)`. Public vanity metric, never an audited figure.
+
 ## Environment
 
 All four vars are build-time inlined by Vite, so **changing any of them requires a
@@ -80,9 +96,15 @@ if the views are missing).
 | `vote_stats_hourly` | cumulative line, daily-rate bars (client rolls hours→days) |
 | `vote_stats_totals` | collected counts |
 | `initiative_info` | labels, `total_elements`, `is_initial_done` |
+| `visit_stats` | site traffic card (`db/visits.sql`, separate from `db/stats.sql`) |
 
 - Views run `security_invoker = off` on purpose: they bypass RLS so aggregates stay
-  public for every initiative while raw rows stay locked to ours.
+  public for every initiative while raw rows stay locked to ours. Forgetting it
+  fails *silently* — the view runs as the caller, hits RLS, and returns zero rows
+  with no error. A view that reports 0 rather than throwing is the symptom.
+- `create or replace view` cannot rename a column (`cannot change name of view
+  column`). Renaming one means `drop view` + recreate — which also drops the
+  `security_invoker` setting and the grants, so both must be re-applied after.
 - **`count(*)` on `votes` understates any initiative still being scraped.**
   `scrape_state.total_elements` is the true population; `is_initial_done` says
   whether `votes` has caught up. Charts show total with a collected-so-far overlay
@@ -90,6 +112,14 @@ if the views are missing).
   standing — as of 2026-08-25 that would have shown 240–224 instead of 428–224.
 - History is **retroactive**: the scraper backfills older pages, so past buckets
   grow for in-progress initiatives.
+- Visits load on their own path (`visits`/`visitsFailed`), not through
+  `fetchStats`. `db/visits.sql` may not have been run on a given deployment, and
+  a missing `visit_stats` must not blank out the vote charts. The card hides
+  instead. Traffic gets its own card on purpose — a page view is a different
+  unit over a different population than a vote, so the two never share an axis.
+- `trackView()` swallows every error, the one exception to the surface-errors
+  rule below: a failed analytics insert must not block a route change or alarm a
+  reader, and nothing on the page depends on the result.
 - Charts are Chart.js + vue-chartjs, lazy-loaded with the route (Рақамлар's chunk
   is unaffected). Ranking bars are plain HTML, not a chart, so values are labeled.
 - Series colors live in `src/lib/palette.ts` — a validated 8-hue categorical set.

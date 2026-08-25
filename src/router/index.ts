@@ -1,4 +1,5 @@
 import { createRouter, createWebHistory } from 'vue-router'
+import { trackView } from '@/lib/visits'
 
 const router = createRouter({
   // HTML5 history (clean URLs, no #). GitHub Pages has no SPA rewrite, so the
@@ -22,6 +23,13 @@ const router = createRouter({
       component: () => import('@/pages/SettingsPage.vue')
     }
   ],
+})
+
+// Counts the first load and every client-side navigation. afterEach, so a
+// failed or cancelled navigation is never logged. trackView never throws and
+// never awaits — see src/lib/visits.ts.
+router.afterEach((to) => {
+  trackView(to.path)
 })
 
 export default router
