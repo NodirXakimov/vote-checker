@@ -343,7 +343,28 @@ function formatStamp(value: string): string {
         <span v-if="data && data.lastScrapedAt" class="muted">
           Янгиланди: {{ formatStamp(data.lastScrapedAt) }}
         </span>
-        <button class="ghost-btn" :disabled="loading" @click="load">Янгилаш</button>
+        <button
+          class="refresh-btn"
+          :disabled="loading"
+          aria-label="Янгилаш"
+          title="Янгилаш"
+          @click="load"
+        >
+          <svg
+            class="refresh-icon"
+            :class="{ spinning: loading }"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="1.9"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            aria-hidden="true"
+          >
+            <polyline points="23 4 23 10 17 10" />
+            <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10" />
+          </svg>
+        </button>
       </div>
     </header>
 
@@ -546,25 +567,41 @@ h1 {
   color: #6b7280;
 }
 
-.ghost-btn {
-  padding: 6px 12px;
-  font-size: 13px;
-  color: #374151;
+.refresh-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  padding: 0;
+  color: #6b7280;
   background: white;
   border: 1px solid #d1d5db;
-  border-radius: 8px;
+  border-radius: 50%;
   cursor: pointer;
   transition: 0.15s;
 }
 
-.ghost-btn:hover:not(:disabled) {
+.refresh-btn:hover:not(:disabled) {
   border-color: #2563eb;
   color: #2563eb;
+  background: #eff6ff;
 }
 
-.ghost-btn:disabled {
-  opacity: 0.5;
+.refresh-btn:disabled {
   cursor: default;
+  color: #9ca3af;
+}
+
+.refresh-icon {
+  width: 16px;
+  height: 16px;
+}
+
+/* Reuses the spinner keyframes below -- the icon itself reports progress, so
+   the button needs no separate loading state. */
+.refresh-icon.spinning {
+  animation: spin 0.9s linear infinite;
 }
 
 .card {
