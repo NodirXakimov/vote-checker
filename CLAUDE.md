@@ -20,7 +20,10 @@ No test runner is configured.
 
 Vue 3 + TypeScript SPA built with Vite, deployed to GitHub Pages at `/vote-checker/`.
 
-- **Router**: Uses `createWebHashHistory` (hash-based routing) — required for GitHub Pages static hosting since there's no server-side routing.
+- **Router**: Uses `createWebHistory` (clean URLs, no `#`). GitHub Pages has no
+  server-side routing, so `build-only` copies `dist/index.html` to `dist/404.html`;
+  GH Pages serves that for unknown paths and the router resolves them client-side.
+  Do not switch to hash history — the `/#/` URLs were rejected.
 - **Pages**: New routes go in `src/pages/` as `.vue` files and are registered in `src/router/index.ts` using lazy imports (`() => import('@/pages/...')`).
 - **Path alias**: `@` resolves to `src/`.
 - **Base URL**: Vite is configured with `base: '/vote-checker/'` — all asset paths are prefixed accordingly.

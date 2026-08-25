@@ -2,18 +2,25 @@
 import { ref, watch, onMounted } from 'vue'
 import { supabase } from '@/lib/supabase'
 import AppPagination from '@/components/AppPagination.vue'
-import { formatDateTime } from "@/utils/formatDateTime.ts";
+import { formatDateTime } from '@/utils/formatDateTime'
+import { INITIATIVE_ID, INITIATIVE_NAME } from '@/lib/config'
 
-// ── adjust these to match your Supabase table ──────────────────────────────
+// -- adjust these to match your Supabase table ------------------------------
 const TABLE = 'votes'
 const COL_PHONE = 'phone_number'
 const COL_DATE = 'vote_date'
+const COL_INITIATIVE = 'initiative_id'
 const PAGE_SIZE = 10
-// ───────────────────────────────────────────────────────────────────────────
+// ---------------------------------------------------------------------------
 
 interface Row {
   id: number
   [key: string]: unknown
+}
+
+interface Part {
+  text: string
+  match: boolean
 }
 
 const query = ref('')
@@ -25,22 +32,32 @@ const loading = ref(false)
 const loadingAll = ref(false)
 const allTotalPages = ref(0)
 const totalPages = ref(0)
+const errorMsg = ref('')
 
 let debounceTimer: ReturnType<typeof setTimeout>
+// Incremented per request so a slow earlier response cannot overwrite a newer one.
+let requestId = 0
 
 async function fetchAllCount() {
   loadingAll.value = true
-  const { count } = await supabase
+  const { count, error } = await supabase
     .from(TABLE)
     .select('*', { count: 'exact', head: true })
+    .eq(COL_INITIATIVE, INITIATIVE_ID)
 
-  allCount.value = count ?? 0
-  allTotalPages.value = Math.ceil((count ?? 0) / PAGE_SIZE)
+  if (error) {
+    errorMsg.value = error.message
+  } else {
+    allCount.value = count ?? 0
+    allTotalPages.value = Math.ceil((count ?? 0) / PAGE_SIZE)
+  }
   loadingAll.value = false
 }
 
 async function fetchData() {
+  const id = ++requestId
   loading.value = true
+  errorMsg.value = ''
 
   const from = (currentPage.value - 1) * PAGE_SIZE
   const to = from + PAGE_SIZE - 1
@@ -48,17 +65,26 @@ async function fetchData() {
   let req = supabase
     .from(TABLE)
     .select('*', { count: 'exact' })
+    .eq(COL_INITIATIVE, INITIATIVE_ID)
     .order(COL_DATE, { ascending: false })
     .range(from, to)
 
-  const formatted = formatPhoneQuery(query.value)
-  if (formatted) {
-    req = req.ilike(COL_PHONE, `%${formatted}%`)
+  const candidates = phoneQueryCandidates(query.value)
+  if (candidates.length) {
+    req = req.or(candidates.map((c) => `${COL_PHONE}.ilike.%${c}%`).join(','))
   }
 
   const { data, count, error } = await req
 
-  if (!error) {
+  // A newer request started while this one was in flight -- discard this result.
+  if (id !== requestId) return
+
+  if (error) {
+    errorMsg.value = error.message
+    rows.value = []
+    filteredCount.value = 0
+    totalPages.value = 0
+  } else {
     rows.value = (data as Row[]) ?? []
     filteredCount.value = count ?? 0
     totalPages.value = Math.ceil((count ?? 0) / PAGE_SIZE)
@@ -70,8 +96,13 @@ async function fetchData() {
 watch(query, () => {
   clearTimeout(debounceTimer)
   debounceTimer = setTimeout(() => {
-    currentPage.value = 1
-    fetchData()
+    // Resetting the page triggers the currentPage watcher, which fetches.
+    // Only fetch directly when already on page 1, otherwise we fire twice.
+    if (currentPage.value !== 1) {
+      currentPage.value = 1
+    } else {
+      fetchData()
+    }
   }, 400)
 })
 
@@ -86,17 +117,38 @@ function onPageChange(page: number) {
   currentPage.value = page
 }
 
-// Groups digits into pairs joined by dashes to match stored format (e.g. "5518" → "55-18")
-function formatPhoneQuery(input: string): string {
+// Numbers are stored as dash-separated digit pairs (e.g. "90-12-34-56"), so a
+// typed substring can start on either an even or an odd offset. Build both
+// alignments and match either one.
+function phoneQueryCandidates(input: string): string[] {
   const digits = input.replace(/\D/g, '')
-  if (!digits) return ''
-  return digits.match(/.{1,2}/g)!.join('-')
+  if (!digits) return []
+
+  const even = digits.match(/.{1,2}/g)!.join('-')
+  if (digits.length === 1) return [even]
+
+  const odd = digits[0] + '-' + digits.slice(1).match(/.{1,2}/g)!.join('-')
+  return even === odd ? [even] : [even, odd]
 }
 
-function highlightMatch(text: string): string {
-  const q = formatPhoneQuery(query.value)
-  if (!q) return text
-  return text.replace(new RegExp(`(${q.replace(/[-]/g, '\\-')})`, 'gi'), '<mark class="highlight">$1</mark>')
+// Splits text into matched/unmatched parts so the template can render <mark>
+// elements without v-html (which would inject unescaped database text).
+function highlightParts(text: string): Part[] {
+  const candidates = phoneQueryCandidates(query.value)
+  const needle = candidates.find((c) => text.includes(c))
+  if (!needle) return [{ text, match: false }]
+
+  const parts: Part[] = []
+  let i = 0
+  for (;;) {
+    const idx = text.indexOf(needle, i)
+    if (idx === -1) break
+    if (idx > i) parts.push({ text: text.slice(i, idx), match: false })
+    parts.push({ text: needle, match: true })
+    i = idx + needle.length
+  }
+  if (i < text.length) parts.push({ text: text.slice(i), match: false })
+  return parts
 }
 
 </script>
@@ -105,7 +157,7 @@ function highlightMatch(text: string): string {
   <div class="page-wrapper">
     <header>
       <h1>📞 Телефон рақамлар</h1>
-      <h2>(Нишон тумани, Гулистон МФЙ)</h2>
+      <h2>({{ INITIATIVE_NAME || 'Нишон тумани, Гулистон МФЙ' }})</h2>
       <div class="stats">
         <span>Жами: <span v-if="loadingAll" class="stat-loading">...</span><template v-else>{{ allCount }}</template></span>
         <span v-if="query">Топилди: <span v-if="loading" class="stat-loading">...</span><template v-else>{{ filteredCount }}</template></span>
@@ -135,7 +187,13 @@ function highlightMatch(text: string): string {
           </tr>
         </thead>
         <tbody>
-          <tr v-if="loading">
+          <tr v-if="errorMsg">
+            <td colspan="3" class="error-cell">
+              <p class="error-title">Хатолик юз берди</p>
+              <p class="error-hint">{{ errorMsg }}</p>
+            </td>
+          </tr>
+          <tr v-else-if="loading">
             <td colspan="3" class="loading-cell">
               <span class="spinner"></span>
             </td>
@@ -154,8 +212,13 @@ function highlightMatch(text: string): string {
             </td>
           </tr>
           <tr v-else v-for="(row, index) in rows" :key="row.id">
-            <td>{{ (currentPage - 1) * 10 + index + 1 }}</td>
-            <td v-html="highlightMatch(String(row[COL_PHONE] ?? ''))"></td>
+            <td>{{ (currentPage - 1) * PAGE_SIZE + index + 1 }}</td>
+            <td>
+              <template v-for="(part, i) in highlightParts(String(row[COL_PHONE] ?? ''))" :key="i"
+                ><mark v-if="part.match" class="highlight">{{ part.text }}</mark
+                ><template v-else>{{ part.text }}</template
+              ></template>
+            </td>
             <td>{{ formatDateTime(String(row[COL_DATE] ?? '')) }}</td>
           </tr>
         </tbody>
@@ -296,7 +359,7 @@ tbody tr:hover {
   background: #f8fafc;
 }
 
-:deep(.highlight) {
+.highlight {
   background: #fde68a;
   padding: 2px 3px;
   border-radius: 3px;
@@ -304,6 +367,25 @@ tbody tr:hover {
 
 .empty-cell {
   padding: 40px 14px !important;
+}
+
+.error-cell {
+  padding: 32px 14px !important;
+  text-align: center;
+}
+
+.error-title {
+  font-size: 15px;
+  font-weight: 500;
+  color: #b91c1c;
+  margin: 0 0 4px;
+}
+
+.error-hint {
+  font-size: 13px;
+  color: #9ca3af;
+  margin: 0;
+  word-break: break-word;
 }
 
 .empty-state {
@@ -340,8 +422,15 @@ tbody tr:hover {
     display: none;
   }
 
+  /* Sits beside the absolutely positioned burger button; the side padding keeps
+     long titles from sliding under it. */
   h1 {
-    font-size: 20px;
+    min-height: 40px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0 48px;
+    font-size: 18px;
   }
 
 }
