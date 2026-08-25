@@ -1,0 +1,1 @@
+import{a as e,s as t,t as n,v as r}from"./_plugin-vue_export-helper-zBFsfkZ2.js";var i={},a={class:`page-wrapper`};function o(n,i){return r(),t(`div`,a,[...i[0]||=[e(`h1`,null,`Созламалар`,-1)]])}var s=n(i,[[`render`,o],[`__scopeId`,`data-v-188d263f`]]);export{s as default};

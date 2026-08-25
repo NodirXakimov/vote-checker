@@ -1,15 +1,23 @@
 <!DOCTYPE html>
-<html>
-<head>
-  <meta charset="utf-8">
-  <script>
-    const path = window.location.pathname;
-    const base = '/vote-checker';
-    const route = path.startsWith(base) ? path.slice(base.length) : path;
-    sessionStorage.setItem('redirect', route || '/');
-    window.location.replace(base + '/');
-  </script>
-  <title>404</title>
-</head>
-<body></body>
+<html lang="">
+  <head>
+    <meta charset="UTF-8">
+    <link rel="icon" href="/vote-checker/favicon.ico">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Vote Checker</title>
+    <script type="module" crossorigin src="/vote-checker/assets/index-C0Y6NUVt.js"></script>
+    <link rel="modulepreload" crossorigin href="/vote-checker/assets/_plugin-vue_export-helper-zBFsfkZ2.js">
+    <link rel="modulepreload" crossorigin href="/vote-checker/assets/runtime-dom.esm-bundler-BkCnfJqx.js">
+    <link rel="stylesheet" crossorigin href="/vote-checker/assets/index-BAtv_V73.css">
+  </head>
+  <body>
+    <div id="app"></div>
+    <script>
+      const redirect = sessionStorage.getItem('redirect');
+      if (redirect) {
+        sessionStorage.removeItem('redirect');
+        history.replaceState(null, '', '/vote-checker' + redirect);
+      }
+    </script>
+  </body>
 </html>
