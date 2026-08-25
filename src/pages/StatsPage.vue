@@ -470,7 +470,7 @@ function formatStamp(value: string): string {
               <tr>
                 <th class="col-num">#</th>
                 <th class="col-name">Ташаббус</th>
-                <th>Жами</th>
+                <th class="col-total">Жами</th>
                 <th>Юкланди</th>
                 <th>Ҳолат</th>
                 <th v-for="day in tableDaily.days" :key="day" class="col-day">
@@ -485,7 +485,7 @@ function formatStamp(value: string): string {
                   <span class="swatch" :style="{ background: colorOf(item.id) }"></span>
                   {{ item.label }}
                 </td>
-                <td>{{ item.total.toLocaleString('uz-UZ') }}</td>
+                <td class="col-total">{{ item.total.toLocaleString('uz-UZ') }}</td>
                 <td>{{ item.collected.toLocaleString('uz-UZ') }}</td>
                 <td>{{ item.complete ? 'Тўлиқ' : 'Юкланмоқда' }}</td>
                 <td
@@ -772,6 +772,22 @@ h1 {
   left: 0;
   z-index: 1;
   background: white;
+}
+
+/* The headline figure -- set apart from the supporting columns around it. */
+.col-total {
+  background: #f9fafb;
+  border-left: 1px solid #e5e7eb;
+  border-right: 1px solid #e5e7eb;
+  font-size: 16px;
+  font-weight: 600;
+  color: #1f2937;
+  font-variant-numeric: tabular-nums;
+}
+
+th.col-total {
+  font-size: 14px;
+  color: #374151;
 }
 
 .col-day {
