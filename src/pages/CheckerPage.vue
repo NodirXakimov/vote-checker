@@ -156,7 +156,12 @@ function highlightParts(text: string): Part[] {
 <template>
   <div class="page-wrapper">
     <header>
-      <h1>📞 Телефон рақамлар</h1>
+      <h1>
+        <svg class="title-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6A19.79 19.79 0 0 1 2.09 4.18 2 2 0 0 1 4.08 2h3a2 2 0 0 1 2 1.72c.13.96.36 1.9.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.9.34 1.85.57 2.81.7A2 2 0 0 1 22 16.92z" />
+        </svg>
+        <span>Телефон рақамлар</span>
+      </h1>
       <h2>({{ INITIATIVE_NAME || 'Нишон тумани, Гулистон МФЙ' }})</h2>
       <div class="stats">
         <span>Жами: <span v-if="loadingAll" class="stat-loading">...</span><template v-else>{{ allCount }}</template></span>
@@ -232,7 +237,7 @@ function highlightParts(text: string): Part[] {
 <style scoped>
 
 .page-wrapper {
-  max-width: 900px;
+  max-width: 1140px;
   margin: auto;
 }
 
@@ -241,8 +246,17 @@ header {
 }
 
 h1 {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
   font-size: 22px;
-  text-align: center;
+}
+
+.title-icon {
+  width: 1em;
+  height: 1em;
+  flex-shrink: 0;
 }
 
 h2 {
@@ -426,9 +440,6 @@ tbody tr:hover {
      long titles from sliding under it. */
   h1 {
     min-height: 40px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
     padding: 0 48px;
     font-size: 18px;
   }

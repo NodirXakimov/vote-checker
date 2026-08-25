@@ -12,6 +12,11 @@ const router = createRouter({
       component: () => import('@/pages/CheckerPage.vue')
     },
     {
+      path: '/stats',
+      name: 'Stats',
+      component: () => import('@/pages/StatsPage.vue')
+    },
+    {
       path: '/settings',
       name: 'Settings',
       component: () => import('@/pages/SettingsPage.vue')

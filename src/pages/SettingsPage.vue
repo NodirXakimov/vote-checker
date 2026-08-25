@@ -9,7 +9,7 @@
 
 <style scoped>
 .page-wrapper {
-  max-width: 900px;
+  max-width: 1140px;
   margin: auto;
 }
 

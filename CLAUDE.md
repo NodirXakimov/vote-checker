@@ -69,6 +69,35 @@ rebuild and redeploy**. `.env` is gitignored — the machine that builds needs i
 Missing vars throw loudly on purpose — a silently absent `INITIATIVE_ID` would
 publish every initiative's votes. Types live in `env.d.ts`; add new vars there.
 
+## Stats page (`/stats`)
+
+Reads **aggregate views only**, never `votes` directly — `db/stats.sql` creates
+them and must be run in Supabase before the page works (it shows a pointed error
+if the views are missing).
+
+| View | Feeds |
+| --- | --- |
+| `vote_stats_hourly` | cumulative line, daily-rate bars (client rolls hours→days) |
+| `vote_stats_totals` | collected counts |
+| `initiative_info` | labels, `total_elements`, `is_initial_done` |
+
+- Views run `security_invoker = off` on purpose: they bypass RLS so aggregates stay
+  public for every initiative while raw rows stay locked to ours.
+- **`count(*)` on `votes` understates any initiative still being scraped.**
+  `scrape_state.total_elements` is the true population; `is_initial_done` says
+  whether `votes` has caught up. Charts show total with a collected-so-far overlay
+  and an explicit "still loading" notice. Never present `count(*)` as a final
+  standing — as of 2026-08-25 that would have shown 240–224 instead of 428–224.
+- History is **retroactive**: the scraper backfills older pages, so past buckets
+  grow for in-progress initiatives.
+- Charts are Chart.js + vue-chartjs, lazy-loaded with the route (Рақамлар's chunk
+  is unaffected). Ranking bars are plain HTML, not a chart, so values are labeled.
+- Series colors live in `src/lib/palette.ts` — a validated 8-hue categorical set.
+  Slots are pinned to `initiative_id` (sorted), never to rank, so re-sorting never
+  repaints a series. Never add a 9th hue; fold the tail into `OTHER_COLOR`.
+  Three slots fall below 3:1 contrast on white, which is why direct labels and the
+  table view are mandatory relief, not decoration.
+
 ## Security
 
 This app displays **real personal phone numbers**.
