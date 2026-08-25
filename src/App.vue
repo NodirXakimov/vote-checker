@@ -87,9 +87,16 @@ onBeforeUnmount(() => {
   font-size: 14px;
 }
 
+/* Segmented-control pill, so the links read as a nav component rather than
+   loose text on the page background. Card styling matches .table-wrapper. */
 .nav-links {
-  display: flex;
-  gap: 16px;
+  display: inline-flex;
+  gap: 4px;
+  padding: 4px;
+  background: white;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
 }
 
 .nav-links a {
@@ -97,9 +104,11 @@ onBeforeUnmount(() => {
   align-items: center;
   gap: 8px;
   color: #6b7280;
+  font-weight: 500;
   text-decoration: none;
-  padding: 6px 12px;
-  border-radius: 8px;
+  padding: 8px 16px;
+  border-radius: 9px;
+  white-space: nowrap;
   transition: 0.15s;
 }
 
@@ -109,14 +118,16 @@ onBeforeUnmount(() => {
   flex-shrink: 0;
 }
 
-.nav-links a:hover {
+/* Active link keeps its own fill on hover. */
+.nav-links a:hover:not(.router-link-active) {
   background: #f3f4f6;
   color: #374151;
 }
 
 .nav-links a.router-link-active {
-  background: #eff6ff;
-  color: #2563eb;
+  background: #2563eb;
+  color: white;
+  box-shadow: 0 1px 3px rgba(37, 99, 235, 0.3);
 }
 
 .burger {
