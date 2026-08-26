@@ -27,8 +27,10 @@ ChartJS.register(
 const data = ref<StatsData | null>(null)
 const loading = ref(false)
 const errorMsg = ref('')
-// '' = every day (the default view).
+// '' = every day (the default view). The two charts filter independently:
+// the bars answer "how much on day X", the line "how did day X build up".
 const selectedDay = ref('')
+const selectedLineDay = ref('')
 
 async function load() {
   loading.value = true
@@ -92,6 +94,7 @@ const availableDays = computed(() => {
 // rendering an empty chart.
 watch(availableDays, (days) => {
   if (selectedDay.value && !days.includes(selectedDay.value)) selectedDay.value = ''
+  if (selectedLineDay.value && !days.includes(selectedLineDay.value)) selectedLineDay.value = ''
 })
 
 // Per-day counts for the table. Unlike the charts this covers every initiative.
@@ -124,14 +127,45 @@ function dayTint(value: number): string {
   return 'rgba(42, 120, 214, ' + alpha.toFixed(3) + ')'
 }
 
-const hiddenCount = computed(() => Math.max(0, initiatives.value.length - chartIds.value.length))
+// With a day selected, "top eight" means top eight *on that day* -- the all-time
+// leaders can be idle on the day being read, and showing them instead of the
+// day's actual movers answers the wrong question. Ties break on the all-time
+// total. Ours is always kept, same as the unfiltered set.
+function topIdsForDay(day: string): string[] {
+  if (!day) return chartIds.value
+  const byDay = [...initiatives.value].sort(
+    (a, b) => dayVotes(b.id, day) - dayVotes(a.id, day) || b.total - a.total
+  )
+  const top = byDay.slice(0, CHART_LIMIT).map((i) => i.id)
+  const mine = ours.value?.id
+  if (mine && !top.includes(mine)) top[CHART_LIMIT - 1] = mine
+  return top
+}
+
+const lineIds = computed(() => topIdsForDay(selectedLineDay.value))
+const barIds = computed(() => topIdsForDay(selectedDay.value))
+
+const lineHidden = computed(() => Math.max(0, initiatives.value.length - lineIds.value.length))
+const barHidden = computed(() => Math.max(0, initiatives.value.length - barIds.value.length))
 
 // Slots are pinned by sorted id within the charted set, so re-sorting the ranking
-// never repaints a series.
+// never repaints a series. A day filter can change *membership*, which does
+// re-deal the slots -- each chart therefore assigns from its own set, and the
+// direct labels carry identity across them.
 const colors = computed(() => assignColors(chartIds.value))
+const lineColors = computed(() => assignColors(lineIds.value))
+const barColors = computed(() => assignColors(barIds.value))
 
 function colorOf(id: string): string {
   return colors.value[id] ?? OTHER_COLOR
+}
+
+function lineColorOf(id: string): string {
+  return lineColors.value[id] ?? OTHER_COLOR
+}
+
+function barColorOf(id: string): string {
+  return barColors.value[id] ?? OTHER_COLOR
 }
 
 const maxTotal = computed(() =>
@@ -157,6 +191,13 @@ function shortHour(hour: string): string {
   const mm = String(d.getMonth() + 1).padStart(2, '0')
   const hh = String(d.getHours()).padStart(2, '0')
   return dd + '.' + mm + ' ' + hh + ':00'
+}
+
+// Inside a single-day window the date on every tick is noise.
+function hourOnly(hour: string): string {
+  const d = new Date(hour)
+  if (isNaN(d.getTime())) return hour
+  return String(d.getHours()).padStart(2, '0') + ':00'
 }
 
 function shortDay(day: string): string {
@@ -253,14 +294,29 @@ const barValueLabels: Plugin<'bar'> = {
 
 const cumulative = computed(() => {
   if (!data.value) return { labels: [] as string[], datasets: [] }
-  const result = toCumulative(data.value.hourly, chartIds.value)
+  const result = toCumulative(data.value.hourly, lineIds.value)
+
+  // A day filter rebases the curve: each point becomes votes gained since the
+  // hour before the day started, so the day's own shape is visible instead of
+  // a nearly flat slice sitting high on the all-time total.
+  const day = selectedLineDay.value
+  const keep = day
+    ? result.hours.map((h) => h.slice(0, 10) === day)
+    : result.hours.map(() => true)
+  const firstKept = keep.indexOf(true)
+
   return {
-    labels: result.hours.map(shortHour),
+    labels: result.hours.filter((_, i) => keep[i]).map(day ? hourOnly : shortHour),
     datasets: result.series.map((s) => ({
       label: labelOf(s.id),
-      data: s.points,
-      borderColor: colorOf(s.id),
-      backgroundColor: colorOf(s.id),
+      data: (() => {
+        const window = s.points.filter((_, i) => keep[i])
+        if (!day || firstKept < 0) return window
+        const base = firstKept > 0 ? (s.points[firstKept - 1] ?? 0) : 0
+        return window.map((v) => v - base)
+      })(),
+      borderColor: lineColorOf(s.id),
+      backgroundColor: lineColorOf(s.id),
       borderWidth: 2,
       pointRadius: 0,
       pointHoverRadius: 5,
@@ -271,7 +327,7 @@ const cumulative = computed(() => {
 
 const daily = computed(() => {
   if (!data.value) return { labels: [] as string[], datasets: [] }
-  const result = toDaily(data.value.hourly, chartIds.value)
+  const result = toDaily(data.value.hourly, barIds.value)
 
   const keep = selectedDay.value
     ? result.days.map((d) => d === selectedDay.value)
@@ -282,7 +338,7 @@ const daily = computed(() => {
     datasets: result.series.map((s) => ({
       label: labelOf(s.id),
       data: s.points.filter((_, i) => keep[i]),
-      backgroundColor: colorOf(s.id),
+      backgroundColor: barColorOf(s.id),
       borderRadius: 4,
       // 2px surface gap between adjacent bars.
       borderColor: '#ffffff',
@@ -470,8 +526,24 @@ function formatStamp(value: string): string {
         <h2>Вақт бўйича ўсиш</h2>
         <p class="card-hint">
           Соатлик кесимда тўпланган йиғинди.
-          <template v-if="hiddenCount"> Энг кўп овозли {{ chartIds.length }} та ташаббус кўрсатилган; қолган {{ hiddenCount }} таси қуйидаги жадвалда.</template>
+          <template v-if="selectedLineDay"> Кун танланганда фақат ўша куни қўшилган овозлар кўрсатилади (нолдан бошлаб).</template>
+          <template v-if="lineHidden"> Энг кўп овозли {{ lineIds.length }} та ташаббус кўрсатилган<template v-if="selectedLineDay"> (ўша кун бўйича)</template>; қолган {{ lineHidden }} таси қуйидаги жадвалда.</template>
         </p>
+        <!-- Filters sit in one row directly above the chart they act on. -->
+        <div class="filter-row">
+          <button
+            class="chip"
+            :class="{ active: selectedLineDay === '' }"
+            @click="selectedLineDay = ''"
+          >Барчаси</button>
+          <button
+            v-for="day in availableDays"
+            :key="day"
+            class="chip"
+            :class="{ active: selectedLineDay === day }"
+            @click="selectedLineDay = day"
+          >{{ shortDay(day) }}</button>
+        </div>
         <div class="chart-box chart-box--tall">
           <Line :data="cumulative" :options="lineOptions" :plugins="[lastPointLabels]" />
         </div>
@@ -481,7 +553,7 @@ function formatStamp(value: string): string {
         <h2>Кунлик овозлар</h2>
         <p class="card-hint">
           Ҳар куни нечта овоз қўшилгани.
-          <template v-if="hiddenCount"> Энг кўп овозли {{ chartIds.length }} та ташаббус кўрсатилган.</template>
+          <template v-if="barHidden"> Энг кўп овозли {{ barIds.length }} та ташаббус кўрсатилган<template v-if="selectedDay"> (ўша кун бўйича)</template>.</template>
         </p>
         <!-- Filters sit in one row directly above the chart they act on. -->
         <div class="filter-row">
