@@ -45,14 +45,44 @@ export interface StatsData {
   lastScrapedAt: string | null
 }
 
+/**
+ * PostgREST caps a response at 1000 rows and returns the first page silently —
+ * no error, no flag. `vote_stats_hourly` passed that cap, so an unpaged
+ * ascending fetch dropped the newest buckets and the chart looked like voting
+ * had stopped. Page through explicitly instead.
+ *
+ * Ordered by (hour, initiative_id): hour alone has ties, and ties reorder
+ * between requests, which would duplicate some buckets and skip others.
+ */
+const PAGE_SIZE = 1000
+
+async function fetchAllHourly(): Promise<HourlyBucket[]> {
+  const rows: HourlyBucket[] = []
+
+  for (let from = 0; ; from += PAGE_SIZE) {
+    const { data, error } = await supabase
+      .from(V_HOURLY)
+      .select('*')
+      .order('hour', { ascending: true })
+      .order('initiative_id', { ascending: true })
+      .range(from, from + PAGE_SIZE - 1)
+
+    if (error) throw new Error(error.message)
+
+    const page = (data ?? []) as HourlyBucket[]
+    rows.push(...page)
+    if (page.length < PAGE_SIZE) return rows
+  }
+}
+
 export async function fetchStats(): Promise<StatsData> {
   const [info, totals, hourly] = await Promise.all([
     supabase.from(V_INFO).select('*'),
     supabase.from(V_TOTALS).select('*'),
-    supabase.from(V_HOURLY).select('*').order('hour', { ascending: true }),
+    fetchAllHourly(),
   ])
 
-  const failed = [info, totals, hourly].find((r) => r.error)
+  const failed = [info, totals].find((r) => r.error)
   if (failed?.error) throw new Error(failed.error.message)
 
   const totalsById = new Map(
@@ -82,7 +112,7 @@ export async function fetchStats(): Promise<StatsData> {
 
   return {
     initiatives,
-    hourly: (hourly.data ?? []) as HourlyBucket[],
+    hourly,
     lastScrapedAt,
   }
 }

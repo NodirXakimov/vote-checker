@@ -110,6 +110,12 @@ if the views are missing).
   whether `votes` has caught up. Charts show total with a collected-so-far overlay
   and an explicit "still loading" notice. Never present `count(*)` as a final
   standing — as of 2026-08-25 that would have shown 240–224 instead of 428–224.
+- **`vote_stats_hourly` is paged.** PostgREST caps a response at 1000 rows and
+  returns the first page with no error; the unpaged ascending fetch silently
+  dropped the newest hours once the view crossed 1044 rows, so the charts ended a
+  day early. `fetchAllHourly()` pages with `.range()`, ordered by
+  `(hour, initiative_id)` — hour alone ties, and ties reorder between requests.
+  Any new view query that can exceed 1000 rows needs the same treatment.
 - History is **retroactive**: the scraper backfills older pages, so past buckets
   grow for in-progress initiatives.
 - Visits load on their own path (`visits`/`visitsFailed`), not through
