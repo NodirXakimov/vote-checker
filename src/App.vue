@@ -1,8 +1,10 @@
 <script setup lang="ts">
 import { ref, watch, onBeforeUnmount } from 'vue'
-import { useRoute } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
+import { isSignedIn, signOut } from '@/lib/auth'
 
 const route = useRoute()
+const router = useRouter()
 const menuOpen = ref(false)
 const navRef = ref<HTMLElement | null>(null)
 const burgerRef = ref<HTMLButtonElement | null>(null)
@@ -42,10 +44,23 @@ onBeforeUnmount(() => {
   document.removeEventListener('pointerdown', onPointerDown)
   document.removeEventListener('keydown', onKeydown)
 })
+
+async function onSignOut() {
+  // A failed sign-out still leaves a valid token in storage, so send the user to
+  // the login screen either way rather than leaving them on a page whose queries
+  // are about to start failing.
+  try {
+    await signOut()
+  } finally {
+    await router.replace('/login')
+  }
+}
 </script>
 
 <template>
-  <nav class="app-nav" ref="navRef">
+  <!-- Nothing to navigate to while signed out: every route but /login is
+       guarded, so the nav would only offer redirects back here. -->
+  <nav v-if="isSignedIn" class="app-nav" ref="navRef">
     <button
       ref="burgerRef"
       class="burger"
@@ -81,6 +96,14 @@ onBeforeUnmount(() => {
         </svg>
         <span>Созламалар</span>
       </router-link>
+      <button class="signout" type="button" @click="onSignOut">
+        <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+          <polyline points="16 17 21 12 16 7" />
+          <line x1="21" y1="12" x2="9" y2="12" />
+        </svg>
+        <span>Чиқиш</span>
+      </button>
     </div>
   </nav>
 
@@ -107,7 +130,8 @@ onBeforeUnmount(() => {
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
 }
 
-.nav-links a {
+.nav-links a,
+.nav-links .signout {
   display: inline-flex;
   align-items: center;
   gap: 8px;
@@ -120,6 +144,16 @@ onBeforeUnmount(() => {
   transition: 0.15s;
 }
 
+/* Sign-out is an action, not a destination, so it is a real <button> styled to
+   sit in the same segmented control as the links. */
+.nav-links .signout {
+  font: inherit;
+  font-size: 14px;
+  background: none;
+  border: none;
+  cursor: pointer;
+}
+
 .nav-icon {
   width: 16px;
   height: 16px;
@@ -127,7 +161,8 @@ onBeforeUnmount(() => {
 }
 
 /* Active link keeps its own fill on hover. */
-.nav-links a:hover:not(.router-link-active) {
+.nav-links a:hover:not(.router-link-active),
+.nav-links .signout:hover {
   background: #f3f4f6;
   color: #374151;
 }
@@ -210,8 +245,10 @@ onBeforeUnmount(() => {
     display: flex;
   }
 
-  .nav-links a {
+  .nav-links a,
+  .nav-links .signout {
     padding: 10px 12px;
+    justify-content: flex-start;
   }
 }
 </style>

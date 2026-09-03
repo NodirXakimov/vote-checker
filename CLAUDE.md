@@ -134,14 +134,38 @@ if the views are missing).
   Three slots fall below 3:1 contrast on white, which is why direct labels and the
   table view are mandatory relief, not decoration.
 
+## Auth
+
+Supabase Auth (email + password), gating every route except `/login`.
+
+- **`db/auth.sql` is the access control; the login page is not.** It revokes
+  `anon` on `votes` and grants select to `authenticated`. The router guard and
+  `LoginPage.vue` both ship in the bundle and are editable by any visitor — only
+  the JWT role is not. A deployment where `db/auth.sql` has not been run is
+  world-readable no matter what the UI does.
+- `authenticated` does **not** inherit `anon`'s grants. Anything granted to anon
+  in `db/stats.sql` / `db/visits.sql` must be granted to `authenticated` too, or
+  it starts failing with `permission denied for view ...` the moment someone
+  signs in — auth breaks the stats page rather than the checker page.
+- `src/lib/auth.ts` owns the session. `authReady` resolves once the stored
+  session has been read back; `main.ts` awaits it before mounting and the guard
+  awaits it again, because supabase-js restores from localStorage
+  asynchronously — without it every hard refresh bounces to `/login`.
+- `authReady` never rejects. Unreadable storage (private mode) resolves as
+  signed out rather than hanging the app on a blank page.
+- Sign-ups must be disabled in the dashboard. Left on, self-registration hands
+  out the `authenticated` role, which is exactly the role that can read rows.
+- New routes are guarded by default — `meta: { public: true }` is opt-out, so
+  forgetting the meta fails closed.
+
 ## Security
 
 This app displays **real personal phone numbers**.
 
-- The anon key ships in the client bundle. RLS on `votes` is the only access
-  control. As of this writing the policy is `using (true)` — world-readable across
-  every initiative — so the `VITE_INITIATIVE_ID` filter is presentation only, not
-  isolation. README documents the policy that would actually restrict it.
+- The anon key ships in the client bundle. RLS plus role grants on `votes` are
+  the only access control; see **Auth** above. The `VITE_INITIATIVE_ID` filter is
+  presentation, never isolation — it runs client-side against whatever the role
+  is already allowed to read.
 - **Never render database text with `v-html`.** `CheckerPage.vue` previously did
   this for search highlighting; it now uses `highlightParts()`, which returns
   `{ text, match }` segments the template renders as real `<mark>` elements via

@@ -1,5 +1,6 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import { trackView } from '@/lib/visits'
+import { authReady, isSignedIn } from '@/lib/auth'
 
 const router = createRouter({
   // HTML5 history (clean URLs, no #). GitHub Pages has no SPA rewrite, so the
@@ -7,6 +8,12 @@ const router = createRouter({
   // paths and the router takes over client-side.
   history: createWebHistory(import.meta.env.BASE_URL),
   routes: [
+    {
+      path: '/login',
+      name: 'Login',
+      component: () => import('@/pages/LoginPage.vue'),
+      meta: { public: true }
+    },
     {
       path: '/',
       name: 'Checker',
@@ -23,6 +30,16 @@ const router = createRouter({
       component: () => import('@/pages/SettingsPage.vue')
     }
   ],
+})
+
+// Sends signed-out visitors to /login. This is presentation only — the real
+// boundary is the RLS policy from db/auth.sql, which requires the
+// `authenticated` role before `votes` returns a single row. Anyone can bypass
+// this guard by editing the bundle; nobody can bypass the policy.
+router.beforeEach(async (to) => {
+  await authReady
+  if (to.meta.public || isSignedIn.value) return true
+  return { path: '/login', query: { redirect: to.fullPath } }
 })
 
 // Counts the first load and every client-side navigation. afterEach, so a

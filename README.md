@@ -30,7 +30,8 @@ The anon key is bundled into the client, so **row-level security on the `votes`
 table is the only thing restricting who can read it.** The current policy is
 `using (true)`, meaning every initiative's phone numbers are readable by anyone
 who opens devtools — the `VITE_INITIATIVE_ID` filter is presentation, not
-access control. See the RLS note below before deploying.
+access control. `db/auth.sql` closes this — see **Sign-in** below — and until it
+has been run against your project, the deployment is world-readable.
 
 ### Restricting reads to one initiative
 
@@ -44,6 +45,32 @@ using (initiative_id = 'your-initiative-id');
 
 Note this pins the database to a single initiative. If other consumers read the
 same table, scope by role or move the site to a view instead.
+
+## Sign-in
+
+The site is behind Supabase Auth (email + password). `db/auth.sql` is the part
+that matters: it revokes `anon` from `votes` entirely and re-grants reads to the
+`authenticated` role, so an unauthenticated request gets nothing back even with
+the bundled anon key in hand. The login page and the router guard are UX on top
+of that — both ship in the bundle and neither can be relied on alone.
+
+Setup, in order:
+
+1. Supabase dashboard → **Authentication → Users → Add user**, for each person
+   who should have access.
+2. **Authentication → Providers → Email** → turn **off** "Enable sign ups".
+   Left on, anyone can self-register into `authenticated` and read every row.
+3. Run `db/auth.sql` in the SQL editor, replacing `<OURS>` with your
+   `initiative_id`.
+4. Verify from outside the browser — this must return `[]`:
+
+   ```sh
+   curl "$SUPABASE_URL/rest/v1/votes?select=phone_number&limit=1"      -H "apikey: $ANON_KEY" -H "Authorization: Bearer $ANON_KEY"
+   ```
+
+Sessions persist in `localStorage` and refresh automatically, so a reader signs
+in once per browser. There is no password reset flow in the app; reset from the
+dashboard.
 
 ## Commands
 
